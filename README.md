@@ -166,7 +166,43 @@ Input (company name/domain)
 Output: Complete Brief + Logs
 ```
 
-## 📊 Data Model
+## � Deployment
+
+**Deploy to AWS:** Full deployment instructions are available in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Quick Deployment Options
+
+1. **AWS Amplify** (Recommended - Easiest)
+   - Managed Next.js hosting
+   - Automatic builds and deployments
+   - Built-in SSL and CDN
+   - GitHub Actions workflow: `.github/workflows/deploy-aws-amplify.yml`
+
+2. **AWS ECS with Docker** (More Control)
+   - Containerized deployment
+   - Fargate serverless compute
+   - Full infrastructure control
+   - GitHub Actions workflow: `.github/workflows/deploy-aws-ecs.yml`
+
+### Required GitHub Secrets
+
+Configure these in your GitHub dev environment:
+- `AWS_ROLE_ARN` - IAM Role ARN for OIDC authentication
+- `DB_MASTER_PASSWORD` - RDS PostgreSQL password
+- `AMPLIFY_APP_ID` - Amplify app identifier (for Amplify option)
+- `OPENAI_API_KEY` - Optional, for AI features
+- `DEMO_MODE` - `true` or `false`
+
+**Note:** Uses GitHub OIDC for AWS authentication (no long-lived credentials stored).
+
+### Deployment Triggers
+
+- **Automatic:** Push to `main` branch
+- **Manual:** GitHub Actions → Run workflow
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete setup instructions, cost estimates, and troubleshooting.
+
+## �📊 Data Model
 
 ### Core Entities
 

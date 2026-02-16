@@ -1,0 +1,109 @@
+name: Deploy to AWS Amplify
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  deploy:
+    name: Deploy to AWS Amplify
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-LeadIntelligence-Deploy
+
+      - name: Deploy RDS Database (if not exists)
+        env:
+          STACK_NAME: 'lead-intelligence-db'
+          DB_PASSWORD: ${{ secrets.DB_MASTER_PASSWORD }}
+        run: |
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+            echo "✅ RDS stack already exists"
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region ${{ env.AWS_REGION }} --query 'Stacks[0].StackStatus' --output text)
+            echo "Stack status: $STATUS"
+          else
+            echo "🆕 Creating RDS stack..."
+            chmod +x infrastructure/deploy-stack.sh
+            ./infrastructure/deploy-stack.sh
+          fi
+
+      - name: Get Database URL from CloudFormation
+        id: get-db-url
+        run: |
+          DB_URL=$(aws cloudformation describe-stacks \
+            --stack-name "lead-intelligence-db" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`DatabaseURL`].OutputValue' \
+            --output text)
+          echo "DATABASE_URL=$DB_URL" >> $GITHUB_OUTPUT
+          echo "✅ Retrieved DATABASE_URL from CloudFormation stack"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup Prisma
+        run: npx prisma generate
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        env:
+          DATABASE_URL: ${{ steps.get-db-url.outputs.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEMO_MODE: ${{ secrets.DEMO_MODE }}
+        run: npm run build
+
+      - name: Deploy to Amplify
+        run: |
+          # Install Amplify CLI
+          npm install -g @aws-amplify/cli
+          
+          # Deploy to Amplify
+          aws amplify create-deployment \
+            --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+            --branch-name main
+          
+          echo "✅ Deployment initiated to AWS Amplify"
+          echo "🔗 App URL: https://${{ secrets.AMPLIFY_APP_ID }}.amplifyapp.com"
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ steps.get-db-url.outputs.DATABASE_URL }}
+        run: |
+          npx prisma db push --skip-generate
+
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Amplify App:** ${{ secrets.AMPLIFY_APP_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Application deployed successfully" >> $GITHUB_STEP_SUMMARY

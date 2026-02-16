@@ -1,0 +1,116 @@
+name: Deploy to AWS ECS (Docker)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: 'us-east-1'
+  ECR_REPOSITORY: 'autonomous-lead-intelligence'
+  ECS_SERVICE: 'lead-intelligence-service'
+  ECS_CLUSTER: 'lead-intelligence-cluster'
+  ECS_TASK_DEFINITION: 'lead-intelligence-task'
+  CONTAINER_NAME: 'lead-intelligence-app'
+
+jobs:
+  build-and-deploy:
+    name: Build Docker Image and Deploy to ECS
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-LeadIntelligence-ECS-Deploy
+
+      - name: Deploy RDS Database (if not exists)
+        env:
+          STACK_NAME: 'lead-intelligence-db'
+          DB_PASSWORD: ${{ secrets.DB_MASTER_PASSWORD }}
+        run: |
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+            echo "✅ RDS stack already exists"
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region ${{ env.AWS_REGION }} --query 'Stacks[0].StackStatus' --output text)
+            echo "Stack status: $STATUS"
+          else
+            echo "🆕 Creating RDS stack..."
+            chmod +x infrastructure/deploy-stack.sh
+            ./infrastructure/deploy-stack.sh
+          fi
+
+      - name: Get Database URL from CloudFormation
+        id: get-db-url
+        run: |
+          DB_URL=$(aws cloudformation describe-stacks \
+            --stack-name "lead-intelligence-db" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`DatabaseURL`].OutputValue' \
+            --output text)
+          echo "DATABASE_URL=$DB_URL" >> $GITHUB_OUTPUT
+          echo "✅ Retrieved DATABASE_URL from CloudFormation stack"
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg DATABASE_URL="${{ steps.get-db-url.outputs.DATABASE_URL }}" \
+            --build-arg OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            --build-arg DEMO_MODE="${{ secrets.DEMO_MODE }}" \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+            --query taskDefinition > task-definition.json
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Deployment summary
+        run: |
+          echo "### 🚀 ECS Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** ${{ env.ECS_CLUSTER }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ env.ECS_SERVICE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Container deployed successfully" >> $GITHUB_STEP_SUMMARY
