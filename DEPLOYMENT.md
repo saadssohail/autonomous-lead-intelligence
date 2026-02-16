@@ -67,7 +67,7 @@ chmod +x infrastructure/deploy-stack.sh
 
 **What's created:**
 - VPC with 2 public subnets (multi-AZ)
-- RDS PostgreSQL 15.4 (db.t3.micro)
+- RDS PostgreSQL 15 (db.t3.micro, latest minor version)
 - Security group (allows PostgreSQL port 5432)
 - Automated backups (7 days retention)
 - CloudWatch monitoring
