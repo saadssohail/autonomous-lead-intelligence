@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { BriefSummary } from '@/types';
 
@@ -10,11 +10,7 @@ export default function AccountsPage() {
   const [sortBy, setSortBy] = useState<'score' | 'createdAt'>('score');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  useEffect(() => {
-    loadBriefs();
-  }, [sortBy, sortOrder]);
-
-  const loadBriefs = async () => {
+  const loadBriefs = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/briefs?sortBy=${sortBy}&sortOrder=${sortOrder}`);
@@ -28,7 +24,11 @@ export default function AccountsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sortBy, sortOrder]);
+
+  useEffect(() => {
+    loadBriefs();
+  }, [loadBriefs]);
 
   const getScoreColor = (score: number) => {
     if (score >= 70) return 'text-green-400';

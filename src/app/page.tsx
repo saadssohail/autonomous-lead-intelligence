@@ -57,7 +57,7 @@ export default function Home() {
               </div>
               <div className="flex items-start">
                 <span className="font-bold text-blue-400 mr-3">5.</span>
-                <span>Generates "why now" assessment and personalized outreach message</span>
+                <span>Generates &quot;why now&quot; assessment and personalized outreach message</span>
               </div>
             </div>
           </div>

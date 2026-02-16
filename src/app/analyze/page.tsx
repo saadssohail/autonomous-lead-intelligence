@@ -250,7 +250,7 @@ export default function AnalyzePage() {
                       <ul className="space-y-1 pl-4">
                         {pain.supportingEvidence.slice(0, 3).map((evidence, eidx) => (
                           <li key={eidx} className="italic">
-                            "{evidence.length > 100 ? evidence.slice(0, 100) + '...' : evidence}"
+                            &quot;{evidence.length > 100 ? evidence.slice(0, 100) + '...' : evidence}&quot;
                           </li>
                         ))}
                       </ul>

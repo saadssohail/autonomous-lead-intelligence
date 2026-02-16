@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Brief } from '@/types';
@@ -11,11 +11,7 @@ export default function BriefDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadBrief();
-  }, [params.id]);
-
-  const loadBrief = async () => {
+  const loadBrief = useCallback(async () => {
     try {
       const response = await fetch(`/api/briefs/${params.id}`);
       const data = await response.json();
@@ -30,7 +26,11 @@ export default function BriefDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    loadBrief();
+  }, [loadBrief]);
 
   const downloadJSON = () => {
     if (!brief) return;
