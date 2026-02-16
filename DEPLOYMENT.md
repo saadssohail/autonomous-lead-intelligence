@@ -306,9 +306,15 @@ Same as Amplify setup (Steps 3-4 above). The same OIDC role and secrets work for
 
 Add this to your GitHub dev environment along with the existing secrets.
 
-### Step 6: Deploy
+### Step 6: Deploy (Manual Only)
 
-Push to `main` branch or manually trigger **"Deploy to AWS ECS (Docker)"** workflow.
+**ECS deployment is manual-trigger only:**
+
+1. Go to **Actions** tab in GitHub
+2. Select **"Deploy to AWS ECS (Docker)"** workflow
+3. Click **"Run workflow"** → **"Run workflow"**
+
+**Note:** Unlike Amplify, the ECS workflow does NOT run automatically on push to `main`. This prevents duplicate deployments.
 
 ---
 
