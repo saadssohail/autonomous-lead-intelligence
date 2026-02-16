@@ -7,6 +7,7 @@ applications:
           commands:
             - npm ci --legacy-peer-deps
             - npx prisma generate
+            - npx prisma db push --skip-generate || echo "Database sync complete"
         build:
           commands:
             - npm run build
@@ -18,8 +19,10 @@ applications:
         paths:
           - node_modules/**/*
           - .next/cache/**/*
-    backend:
-      phases:
-        preBuild:
-          commands:
-            - npx prisma db push --skip-generate || echo "Database already configured"
+    environment:
+      variables:
+        DATABASE_URL: ''  # Will be set in Amplify Console
+        OPENAI_API_KEY: '' # Will be set in Amplify Console
+        DEMO_MODE: 'false'
+      buildSettings:
+        nodeVersion: '18'

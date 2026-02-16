@@ -1,4 +1,4 @@
-name: Deploy to AWS Amplify
+name: CI and Database Setup
 
 on:
   push:
@@ -11,8 +11,8 @@ env:
   AWS_REGION: 'us-east-1'
 
 jobs:
-  deploy:
-    name: Deploy to AWS Amplify
+  setup-infrastructure:
+    name: Ensure RDS Database Exists
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -28,7 +28,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-LeadIntelligence-Deploy
+          role-session-name: GitHubActions-LeadIntelligence-Setup
 
       - name: Deploy RDS Database (if not exists)
         env:
@@ -73,6 +73,18 @@ jobs:
           fi
           
           echo "DATABASE_URL=$DB_URL" >> $GITHUB_OUTPUT
+          echo ""
+          echo "📋 Add this DATABASE_URL to Amplify Console environment variables:"
+          echo "$DB_URL"
+
+  ci:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: setup-infrastructure
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -89,38 +101,11 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build application
-        env:
-          DATABASE_URL: ${{ steps.get-db-url.outputs.DATABASE_URL }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          DEMO_MODE: ${{ secrets.DEMO_MODE }}
-        run: npm run build
-
-      - name: Deploy to Amplify
+      - name: Summary
         run: |
-          # Install Amplify CLI
-          npm install -g @aws-amplify/cli
-          
-          # Deploy to Amplify
-          aws amplify create-deployment \
-            --app-id ${{ secrets.AMPLIFY_APP_ID }} \
-            --branch-name staging
-          
-          echo "✅ Deployment initiated to AWS Amplify"
-          echo "🔗 App URL: https://${{ secrets.AMPLIFY_APP_ID }}.amplifyapp.com"
-
-      - name: Run database migrations
-        env:
-          DATABASE_URL: ${{ steps.get-db-url.outputs.DATABASE_URL }}
-        run: |
-          npx prisma db push --skip-generate
-
-      - name: Deployment summary
-        run: |
-          echo "### 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ CI Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
-          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Amplify App:** ${{ secrets.AMPLIFY_APP_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tests:** Passed" >> $GITHUB_STEP_SUMMARY
+          echo "**Database:** Ready" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Application deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 Amplify will auto-deploy on push to connected branches" >> $GITHUB_STEP_SUMMARY
