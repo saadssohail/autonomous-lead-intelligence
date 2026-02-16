@@ -1,28 +1,19 @@
 version: 1
-applications:
-  - appRoot: /
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - npm ci --legacy-peer-deps
-            - npx prisma generate
-            - npx prisma db push --skip-generate || echo "Database sync complete"
-        build:
-          commands:
-            - npm run build
-      artifacts:
-        baseDirectory: .next
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
-          - .next/cache/**/*
-    environment:
-      variables:
-        DATABASE_URL: ''  # Will be set in Amplify Console
-        OPENAI_API_KEY: '' # Will be set in Amplify Console
-        DEMO_MODE: 'false'
-      buildSettings:
-        nodeVersion: '18'
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci --legacy-peer-deps
+        - npx prisma generate
+        - npx prisma db push --skip-generate || echo "Database sync complete"
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*
