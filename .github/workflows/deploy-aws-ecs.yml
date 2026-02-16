@@ -50,13 +50,30 @@ jobs:
       - name: Get Database URL from CloudFormation
         id: get-db-url
         run: |
-          DB_URL=$(aws cloudformation describe-stacks \
+          DB_URL_RAW=$(aws cloudformation describe-stacks \
             --stack-name "lead-intelligence-db" \
             --region ${{ env.AWS_REGION }} \
             --query 'Stacks[0].Outputs[?OutputKey==`DatabaseURL`].OutputValue' \
             --output text)
+          
+          # URL-encode the password to handle special characters
+          # Extract: postgresql://user:password@host:port/database
+          if [[ "$DB_URL_RAW" =~ postgresql://([^:]+):([^@]+)@(.+) ]]; then
+            USERNAME="${BASH_REMATCH[1]}"
+            PASSWORD="${BASH_REMATCH[2]}"
+            HOST_PORT_DB="${BASH_REMATCH[3]}"
+            
+            # URL-encode password using Python (available in GitHub Actions)
+            PASSWORD_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PASSWORD', safe=''))")
+            DB_URL="postgresql://${USERNAME}:${PASSWORD_ENCODED}@${HOST_PORT_DB}"
+            
+            echo "✅ Retrieved and URL-encoded DATABASE_URL from CloudFormation"
+          else
+            DB_URL="$DB_URL_RAW"
+            echo "⚠️ Using raw DATABASE_URL (regex did not match)"
+          fi
+          
           echo "DATABASE_URL=$DB_URL" >> $GITHUB_OUTPUT
-          echo "✅ Retrieved DATABASE_URL from CloudFormation stack"
 
       - name: Login to Amazon ECR
         id: login-ecr
