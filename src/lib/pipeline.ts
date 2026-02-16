@@ -414,12 +414,18 @@ export async function runAnalysisPipeline(
 
   // Step 5: Detect pain themes
   const painThemes = await detectPainThemes(feedback, ctx);
+  
+  // Guardrail: Ensure painThemes is always an array
+  const safePainThemes = Array.isArray(painThemes) ? painThemes : [];
 
   // Step 6: Generate reasoning chains
-  const reasoningChains = await reasonOverSignals(signals, painThemes, ctx);
+  const reasoningChains = await reasonOverSignals(signals, safePainThemes, ctx);
+  
+  // Guardrail: Ensure reasoningChains is always an array
+  const safeReasoningChains = Array.isArray(reasoningChains) ? reasoningChains : [];
 
   // Step 7: Map to capabilities
-  const capabilityMatches = await mapToCapabilities(painThemes, signals, ctx);
+  const capabilityMatches = await mapToCapabilities(safePainThemes, signals, ctx);
 
   // Step 8: Generate why Alfabolt
   const whyAlfabolt = generateWhyAlfabolt(capabilityMatches);
@@ -427,12 +433,12 @@ export async function runAnalysisPipeline(
   // Step 9: Generate why now
   logStep(ctx.logs, 'generate_why_now', 'started');
   const llm = getLLMProvider();
-  const whyNow = await llm.generateWhyNow(reasoningChains, signals);
+  const whyNow = await llm.generateWhyNow(safeReasoningChains, signals);
   logStep(ctx.logs, 'generate_why_now', 'completed');
 
   // Step 10: Generate outreach angle
   logStep(ctx.logs, 'generate_outreach_angle', 'started');
-  const outreachAngle = await llm.generateOutreachAngle(painThemes, reasoningChains);
+  const outreachAngle = await llm.generateOutreachAngle(safePainThemes, safeReasoningChains);
   logStep(ctx.logs, 'generate_outreach_angle', 'completed');
 
   // Step 11: Generate opening message
@@ -447,7 +453,7 @@ export async function runAnalysisPipeline(
 
   // Step 12: Calculate score
   logStep(ctx.logs, 'calculate_score', 'started');
-  const score = calculateLeadScore(signals, painThemes, reasoningChains);
+  const score = calculateLeadScore(signals, safePainThemes, safeReasoningChains);
   logStep(ctx.logs, 'calculate_score', 'completed', `Score: ${score.total}/100`);
 
   // Build snapshot
@@ -467,8 +473,8 @@ export async function runAnalysisPipeline(
     score,
     snapshot,
     signals,
-    painThemes,
-    reasoningChains,
+    painThemes: safePainThemes,
+    reasoningChains: safeReasoningChains,
     whyNow,
     whyAlfabolt,
     capabilityMatches,

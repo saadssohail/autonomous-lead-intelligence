@@ -98,6 +98,35 @@ Each analysis generates:
 - Step-by-step timing
 - Total execution time
 
+## 🤖 NEW: LLM Debug Panel
+
+**Click the purple "🤖 LLM Debug" button** (bottom-right on Analyze page) to see complete transparency into AI interactions:
+
+**What you'll see:**
+- ✅ All prompts sent to the LLM
+- ✅ Raw responses and parsed JSON
+- ✅ Execution times for each operation
+- ✅ Model and temperature settings
+- ✅ Error messages and warnings
+- ✅ Auto-refresh every 3 seconds
+
+**Perfect for:**
+- Debugging AI reasoning
+- Understanding prompt engineering
+- Verifying response quality
+- Demonstrating the pipeline to stakeholders
+- Learning how the intelligence system works
+
+**Built-in Error Handling:**
+The system now includes comprehensive guardrails to prevent errors:
+- Array validation on all LLM responses
+- Graceful fallbacks if AI returns unexpected formats
+- Try-catch blocks on all LLM operations
+- Default values for failed operations
+- Visual error indicators in debug panel
+
+No more `.map()` errors! The system validates all data before processing.
+
 ## Viewing All Accounts
 
 1. Click "Prioritized Accounts" from home
@@ -153,8 +182,20 @@ npm install --legacy-peer-deps
 
 ### Can't See Results
 - Check browser console for errors
-- Verify database was created (`prisma/dev.db` file exists)
+- Verify database was created (`prisma/dev.db` or PostgreSQL connection)
 - Try one of the exact seed company names
+
+### LLM Debug Panel is Empty
+- The panel captures requests during analysis
+- Run a new analysis to populate it
+- Click "Refresh" button to reload interactions
+- Check browser console for API endpoint errors
+
+### Array/Map Errors
+**Fixed!** The new guardrails automatically prevent these errors with:
+- Array validation on all LLM responses
+- Safe fallback values
+- Try-catch error handling
 
 ## Running Tests
 

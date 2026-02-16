@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { Brief, AnalysisRun } from '@/types';
+import LLMDebugPanel from '@/components/LLMDebugPanel';
 
 export default function AnalyzePage() {
   const [companyInput, setCompanyInput] = useState('');
@@ -354,6 +355,9 @@ export default function AnalyzePage() {
           </div>
         )}
       </div>
+      
+      {/* LLM Debug Panel */}
+      <LLMDebugPanel />
     </main>
   );
 }

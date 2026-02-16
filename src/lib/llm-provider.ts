@@ -6,6 +6,61 @@
 import OpenAI from 'openai';
 import type { PainTheme, ReasoningChain, Signal } from '@/types';
 
+// LLM Interaction Log for debugging and transparency
+export interface LLMInteraction {
+  timestamp: Date;
+  operation: string;
+  request: {
+    prompt: string;
+    model?: string;
+    temperature?: number;
+  };
+  response: {
+    content: string;
+    parsed?: any;
+    raw?: string;
+  };
+  duration: number;
+  error?: string;
+}
+
+// Global interaction log (in-memory for demo)
+const llmInteractions: LLMInteraction[] = [];
+
+export function getLLMInteractions(): LLMInteraction[] {
+  return llmInteractions;
+}
+
+export function clearLLMInteractions(): void {
+  llmInteractions.length = 0;
+}
+
+// Helper to validate and ensure array return
+function ensureArray<T>(value: any, fallback: T[] = []): T[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object' && Array.isArray(value.themes)) return value.themes;
+  if (value && typeof value === 'object' && Array.isArray(value.chains)) return value.chains;
+  return fallback;
+}
+
+// Helper to log LLM interactions
+function logInteraction(interaction: LLMInteraction): void {
+  llmInteractions.push(interaction);
+  // Keep only last 50 interactions
+  if (llmInteractions.length > 50) {
+    llmInteractions.shift();
+  }
+  // Also log to console in dev mode
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[LLM] ${interaction.operation}:`, {
+      duration: `${interaction.duration}ms`,
+      promptLength: interaction.request.prompt.length,
+      responseLength: interaction.response.content.length,
+      error: interaction.error,
+    });
+  }
+}
+
 export interface LLMProvider {
   detectPainThemes(feedback: string[]): Promise<PainTheme[]>;
   generateReasoningChains(signals: Signal[], painThemes: PainTheme[]): Promise<ReasoningChain[]>;
@@ -30,6 +85,7 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async detectPainThemes(feedback: string[]): Promise<PainTheme[]> {
+    const startTime = Date.now();
     const prompt = `Analyze the following customer feedback and identify dominant pain themes.
 For each theme, provide:
 - A concise theme name (2-4 words)
@@ -40,29 +96,57 @@ For each theme, provide:
 Feedback:
 ${feedback.map((f, i) => `${i + 1}. "${f}"`).join('\n')}
 
-Return a JSON array of pain themes. Example format:
-[
-  {
-    "theme": "Slow KYC verification",
-    "category": "onboarding",
-    "supportingEvidence": ["quote1", "quote2"],
-    "severityScore": 8.5
-  }
-]`;
+Return ONLY a JSON object with a "themes" array. Example format:
+{
+  "themes": [
+    {
+      "theme": "Slow KYC verification",
+      "category": "onboarding",
+      "supportingEvidence": ["quote1", "quote2"],
+      "severityScore": 8.5
+    }
+  ]
+}`;
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
-      temperature: 0.3,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      });
 
-    const content = response.choices[0]?.message?.content || '{"themes":[]}';
-    const parsed = JSON.parse(content);
-    return parsed.themes || parsed || [];
+      const content = response.choices[0]?.message?.content || '{"themes":[]}';
+      const parsed = JSON.parse(content);
+      const themes = ensureArray<PainTheme>(parsed.themes || parsed, []);
+      
+      // Log interaction
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'detectPainThemes',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.3 },
+        response: { content, parsed, raw: content },
+        duration: Date.now() - startTime,
+      });
+      
+      return themes;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'detectPainThemes',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.3 },
+        response: { content: '', parsed: null },
+        duration: Date.now() - startTime,
+        error: errorMsg,
+      });
+      console.error('Pain theme detection failed:', error);
+      return []; // Return empty array on error
+    }
   }
 
   async generateReasoningChains(signals: Signal[], painThemes: PainTheme[]): Promise<ReasoningChain[]> {
+    const startTime = Date.now();
     const prompt = `You are a B2B sales intelligence analyst. Given these signals and pain themes, generate explicit reasoning chains following the pattern:
 Observation → Inference → Opportunity
 
@@ -75,29 +159,57 @@ ${painThemes.map(p => `- ${p.theme} (severity: ${p.severityScore}/10)`).join('\n
 Generate 3-5 reasoning chains that connect signals and pain points to business opportunities.
 Each chain should have high/medium/low confidence.
 
-Return JSON array format:
-[
-  {
-    "observation": "Company raised $25M Series B and is hiring 5 backend engineers",
-    "inference": "Rapid scaling underway with platform expansion plans",
-    "opportunity": "Needs external engineering support to accelerate development without quality issues",
-    "confidence": "high"
-  }
-]`;
+Return ONLY a JSON object with a "chains" array. Example format:
+{
+  "chains": [
+    {
+      "observation": "Company raised $25M Series B and is hiring 5 backend engineers",
+      "inference": "Rapid scaling underway with platform expansion plans",
+      "opportunity": "Needs external engineering support to accelerate development without quality issues",
+      "confidence": "high"
+    }
+  ]
+}`;
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
-      temperature: 0.4,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.4,
+      });
 
-    const content = response.choices[0]?.message?.content || '{"chains":[]}';
-    const parsed = JSON.parse(content);
-    return parsed.chains || parsed || [];
+      const content = response.choices[0]?.message?.content || '{"chains":[]}';
+      const parsed = JSON.parse(content);
+      const chains = ensureArray<ReasoningChain>(parsed.chains || parsed, []);
+      
+      // Log interaction
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateReasoningChains',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.4 },
+        response: { content, parsed, raw: content },
+        duration: Date.now() - startTime,
+      });
+      
+      return chains;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateReasoningChains',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.4 },
+        response: { content: '', parsed: null },
+        duration: Date.now() - startTime,
+        error: errorMsg,
+      });
+      console.error('Reasoning chain generation failed:', error);
+      return []; // Return empty array on error
+    }
   }
 
   async generateWhyNow(reasoningChains: ReasoningChain[], signals: Signal[]): Promise<string> {
+    const startTime = Date.now();
     const prompt = `Based on these reasoning chains and signals, write a compelling 2-3 sentence "why now" statement explaining why this is the right time to engage this prospect.
 
 Reasoning Chains:
@@ -108,17 +220,43 @@ ${signals.slice(0, 5).map(s => `- ${s.type}: ${s.evidenceText}`).join('\n')}
 
 Write a concise, specific "why now" statement.`;
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.5,
-      max_tokens: 200,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 200,
+      });
 
-    return response.choices[0]?.message?.content || 'Timing is optimal based on recent signals.';
+      const content = response.choices[0]?.message?.content || 'Timing is optimal based on recent signals.';
+      
+      // Log interaction
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateWhyNow',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.5 },
+        response: { content, raw: content },
+        duration: Date.now() - startTime,
+      });
+      
+      return content;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateWhyNow',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.5 },
+        response: { content: '' },
+        duration: Date.now() - startTime,
+        error: errorMsg,
+      });
+      console.error('Why now generation failed:', error);
+      return 'Timing is optimal based on recent signals.';
+    }
   }
 
   async generateOutreachAngle(painThemes: PainTheme[], reasoningChains: ReasoningChain[]): Promise<string> {
+    const startTime = Date.now();
     const prompt = `Given these pain themes and reasoning chains, recommend a specific outreach angle (one sentence).
 
 Pain Themes:
@@ -129,14 +267,39 @@ ${reasoningChains.slice(0, 3).map(rc => `- ${rc.opportunity}`).join('\n')}
 
 Provide one clear, specific outreach angle.`;
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.6,
-      max_tokens: 100,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.6,
+        max_tokens: 100,
+      });
 
-    return response.choices[0]?.message?.content || 'Lead with your proven expertise in their key pain area.';
+      const content = response.choices[0]?.message?.content || 'Lead with your proven expertise in their key pain area.';
+      
+      // Log interaction
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateOutreachAngle',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.6 },
+        response: { content, raw: content },
+        duration: Date.now() - startTime,
+      });
+      
+      return content;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateOutreachAngle',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.6 },
+        response: { content: '' },
+        duration: Date.now() - startTime,
+        error: errorMsg,
+      });
+      console.error('Outreach angle generation failed:', error);
+      return 'Lead with your proven expertise in their key pain area.';
+    }
   }
 
   async generateOpeningMessage(
@@ -145,6 +308,7 @@ Provide one clear, specific outreach angle.`;
     whyAlfabolt: string,
     outreachAngle: string
   ): Promise<string> {
+    const startTime = Date.now();
     const prompt = `Write a professional, personalized outreach email opening (2-3 short paragraphs) for ${companyName}.
 
 Context:
@@ -154,14 +318,39 @@ Context:
 
 Keep it concise, specific, and value-focused. Don't be overly salesy.`;
 
-    const response = await this.client.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 300,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 300,
+      });
 
-    return response.choices[0]?.message?.content || `Hi ${companyName} team,\n\nI noticed your recent growth and wanted to reach out...`;
+      const content = response.choices[0]?.message?.content || `Hi ${companyName} team,\n\nI noticed your recent growth and wanted to reach out...`;
+      
+      // Log interaction
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateOpeningMessage',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.7 },
+        response: { content, raw: content },
+        duration: Date.now() - startTime,
+      });
+      
+      return content;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      logInteraction({
+        timestamp: new Date(),
+        operation: 'generateOpeningMessage',
+        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.7 },
+        response: { content: '' },
+        duration: Date.now() - startTime,
+        error: errorMsg,
+      });
+      console.error('Opening message generation failed:', error);
+      return `Hi ${companyName} team,\n\nI noticed your recent growth and wanted to reach out...`;
+    }
   }
 }
 
