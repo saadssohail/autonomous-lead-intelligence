@@ -97,18 +97,33 @@ if [[ "$STATUS" == *"COMPLETE"* ]]; then
         --query 'Stacks[0].Outputs' \
         --output table
     
-    # Get DATABASE_URL
-    DATABASE_URL=$(aws cloudformation describe-stacks \
+    # Get DATABASE_URL (raw from CloudFormation - may have unencoded password)
+    DATABASE_URL_RAW=$(aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
         --region "$REGION" \
         --query 'Stacks[0].Outputs[?OutputKey==`DatabaseURL`].OutputValue' \
         --output text)
     
+    # Extract components and URL-encode the password
+    # Format: postgresql://user:password@host:port/database
+    if [[ "$DATABASE_URL_RAW" =~ postgresql://([^:]+):([^@]+)@(.+) ]]; then
+        USERNAME="${BASH_REMATCH[1]}"
+        PASSWORD="${BASH_REMATCH[2]}"
+        HOST_PORT_DB="${BASH_REMATCH[3]}"
+        
+        # URL-encode the password (handle special characters)
+        PASSWORD_ENCODED=$(printf '%s' "$PASSWORD" | jq -sRr @uri)
+        DATABASE_URL="postgresql://${USERNAME}:${PASSWORD_ENCODED}@${HOST_PORT_DB}"
+    else
+        DATABASE_URL="$DATABASE_URL_RAW"
+    fi
+    
     echo ""
-    echo -e "${GREEN}🔗 DATABASE_URL:${NC}"
+    echo -e "${GREEN}🔗 DATABASE_URL (URL-encoded):${NC}"
     echo "$DATABASE_URL"
     echo ""
     echo -e "${YELLOW}⚠️  Add this to your GitHub Secrets as DATABASE_URL${NC}"
+    echo -e "${YELLOW}⚠️  The password has been URL-encoded to handle special characters${NC}"
     
 else
     echo -e "${RED}❌ Stack deployment failed with status: $STATUS${NC}"

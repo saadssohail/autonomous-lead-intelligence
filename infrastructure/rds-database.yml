@@ -218,7 +218,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-port'
 
   DatabaseURL:
-    Description: PostgreSQL connection string
+    Description: PostgreSQL connection string (WARNING - Special characters in password need URL encoding)
     Value: !Sub 'postgresql://${DBMasterUsername}:${DBMasterPassword}@${DBInstance.Endpoint.Address}:${DBInstance.Endpoint.Port}/${DBName}'
     Export:
       Name: !Sub '${AWS::StackName}-database-url'
