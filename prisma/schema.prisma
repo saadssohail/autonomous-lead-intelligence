@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id           String         @id @default(cuid())
+  name         String
+  domain       String         @unique
+  country      String?
+  industry     String         @default("fintech")
+  sourcesUsed  String         // JSON array of source types used
+  createdAt    DateTime       @default(now())
+  
+  signals      Signal[]
+  feedback     FeedbackItem[]
+  painThemes   PainTheme[]
+  briefs       Brief[]
+}
+
+model Signal {
+  id           String   @id @default(cuid())
+  companyId    String
+  type         String   // funding, hiring, expansion, product_launch, technical
+  evidenceText String
+  url          String?
+  extractedAt  DateTime @default(now())
+  
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+}
+
+model FeedbackItem {
+  id        String   @id @default(cuid())
+  companyId String
+  source    String   // trustpilot, g2, capterra, etc.
+  quote     String
+  sentiment String?  // positive, negative, neutral
+  url       String?
+  createdAt DateTime @default(now())
+  
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+}
+
+model PainTheme {
+  id                String   @id @default(cuid())
+  companyId         String
+  theme             String   // onboarding, compliance, payment_reliability, etc.
+  supportingEvidence String  // JSON array of evidence quotes
+  severityScore     Float    // 0-10
+  createdAt         DateTime @default(now())
+  
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+}
+
+model Brief {
+  id              String   @id @default(cuid())
+  companyId       String
+  score           Float
+  scoreRationale  String   // JSON array of bullet reasons
+  snapshot        String   // JSON object with company overview
+  signals         String   // JSON array of signal summaries
+  painThemes      String   // JSON array of pain theme summaries
+  reasoningChains String   // JSON array of observation->inference->opportunity
+  whyNow          String
+  whyAlfabolt     String
+  outreachAngle   String
+  openingMessage  String
+  createdAt       DateTime @default(now())
+  
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@index([companyId])
+  @@index([score])
+}
+
+model Run {
+  id         String   @id @default(cuid())
+  input      String   // JSON object with input parameters
+  status     String   // pending, running, completed, failed
+  logs       String   // JSON array of log entries with timestamps
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+}
