@@ -87,7 +87,7 @@ jobs:
           # Deploy to Amplify
           aws amplify create-deployment \
             --app-id ${{ secrets.AMPLIFY_APP_ID }} \
-            --branch-name main
+            --branch-name staging
           
           echo "✅ Deployment initiated to AWS Amplify"
           echo "🔗 App URL: https://${{ secrets.AMPLIFY_APP_ID }}.amplifyapp.com"

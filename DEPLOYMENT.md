@@ -376,7 +376,7 @@ All deployments require:
 ```bash
 aws amplify get-job \
   --app-id YOUR_APP_ID \
-  --branch-name main \
+  --branch-name staging \
   --job-id JOB_ID
 ```
 
