@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AnalyzeRequestSchema, type AnalyzeResponse, type AnalysisRun } from '@/types';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { runAnalysisPipeline } from '@/lib/pipeline';
 
 export const runtime = "nodejs";

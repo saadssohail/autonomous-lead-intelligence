@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { GetBriefResponse, Brief } from '@/types';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
