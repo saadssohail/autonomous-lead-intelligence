@@ -1,14 +1,12 @@
 version: 1
 applications:
-  - appRoot: /
+  - appRoot: .
     frontend:
       phases:
         preBuild:
           commands:
             - npm ci --legacy-peer-deps
             - npx prisma generate
-            # strongly recommended to remove db push from Amplify builds
-            # - npx prisma db push --skip-generate
         build:
           commands:
             - npm run build
@@ -20,5 +18,3 @@ applications:
         paths:
           - node_modules/**/*
           - .next/cache/**/*
-    # remove the entire `environment:variables` block
-    # keep node version config only if needed via console build settings
