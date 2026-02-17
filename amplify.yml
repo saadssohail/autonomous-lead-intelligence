@@ -3,7 +3,7 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci --legacy-peer-deps
+        - npm ci
         - npx prisma generate
         - npx prisma db push --skip-generate || echo "Database sync complete"
     build:

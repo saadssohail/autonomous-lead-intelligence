@@ -8,6 +8,8 @@ export const maxDuration = 60; // Max 60 seconds for Vercel
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log("DATABASE_URL length:", process.env.DATABASE_URL?.length ?? 0);
+
     
     // Validate input
     const validation = AnalyzeRequestSchema.safeParse(body);
