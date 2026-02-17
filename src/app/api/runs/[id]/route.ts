@@ -56,15 +56,18 @@ export async function GET(
       });
 
       if (brief) {
-        // scoreRationale stores the full score object { total, breakdown, rationale }
-        const scoreData = JSON.parse(brief.scoreRationale || '{}');
+        // scoreRationale stores the rationale array (string[])
+        const rawRationale = JSON.parse(brief.scoreRationale || '[]');
+        // Handle both formats: plain array or full score object
+        const rationale = Array.isArray(rawRationale) ? rawRationale : (rawRationale.rationale || []);
+        const breakdown = Array.isArray(rawRationale) ? {} : (rawRationale.breakdown || {});
         response.brief = {
           id: brief.id,
           companyId: brief.companyId,
           score: {
             total: brief.score,
-            breakdown: scoreData.breakdown || {},
-            rationale: scoreData.rationale || [],
+            breakdown,
+            rationale,
           },
           snapshot: JSON.parse(brief.snapshot || '{}'),
           signals: JSON.parse(brief.signals || '[]'),
@@ -72,6 +75,7 @@ export async function GET(
           reasoningChains: JSON.parse(brief.reasoningChains || '[]'),
           whyNow: brief.whyNow,
           whyAlfabolt: brief.whyAlfabolt,
+          capabilityMatches: [],
           outreachAngle: brief.outreachAngle,
           openingMessage: brief.openingMessage,
           createdAt: brief.createdAt,

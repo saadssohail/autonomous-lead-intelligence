@@ -61,7 +61,10 @@ export async function POST(request: NextRequest) {
       data: {
         companyId: dbCompany.id,
         score: result.brief.score.total,
-        scoreRationale: JSON.stringify(result.brief.score),
+        scoreRationale: JSON.stringify({
+          rationale: result.brief.score.rationale,
+          breakdown: result.brief.score.breakdown,
+        }),
         snapshot: JSON.stringify(result.brief.snapshot),
         signals: JSON.stringify(result.brief.signals),
         painThemes: JSON.stringify(result.brief.painThemes),

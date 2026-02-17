@@ -26,13 +26,20 @@ export async function GET(
       );
     }
 
+    // scoreRationale may be a plain array or a full score object
+    const rawRationale = JSON.parse(brief.scoreRationale || '[]');
+    const rationale = Array.isArray(rawRationale) ? rawRationale : (rawRationale.rationale || []);
+    const breakdown = Array.isArray(rawRationale)
+      ? { painSeverity: 0, signalStrength: 0, fitScore: 0 }
+      : (rawRationale.breakdown || { painSeverity: 0, signalStrength: 0, fitScore: 0 });
+
     const fullBrief: Brief = {
       id: brief.id,
       companyId: brief.companyId,
       score: {
         total: brief.score,
-        breakdown: { painSeverity: 0, signalStrength: 0, fitScore: 0 }, // Could parse from stored data
-        rationale: JSON.parse(brief.scoreRationale),
+        breakdown,
+        rationale,
       },
       snapshot: JSON.parse(brief.snapshot),
       signals: JSON.parse(brief.signals),

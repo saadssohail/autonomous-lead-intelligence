@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     const total = await prisma.brief.count();
 
     const summaries: BriefSummary[] = briefs.map(brief => {
-      const scoreRationale = JSON.parse(brief.scoreRationale) as string[];
+      const raw = JSON.parse(brief.scoreRationale || '[]');
+      const scoreRationale = Array.isArray(raw) ? raw : (raw.rationale || []);
       
       return {
         id: brief.id,

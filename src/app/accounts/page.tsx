@@ -137,7 +137,7 @@ export default function AccountsPage() {
                     <div className="mt-4 space-y-1">
                       <p className="text-blue-200 font-semibold text-sm mb-2">Score Rationale:</p>
                       <ul className="text-sm text-blue-100 space-y-1 pl-4">
-                        {brief.scoreRationale.map((reason, ridx) => (
+                        {(brief.scoreRationale || []).map((reason, ridx) => (
                           <li key={ridx} className="list-disc">{reason}</li>
                         ))}
                       </ul>

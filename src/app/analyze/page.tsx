@@ -258,20 +258,20 @@ export default function AnalyzePage() {
                 <h3 className="text-white font-semibold mb-2">Score Breakdown</h3>
                 <div className="grid grid-cols-3 gap-4 mb-3">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{brief.score.breakdown.painSeverity}</div>
+                    <div className="text-2xl font-bold text-blue-400">{brief.score.breakdown?.painSeverity ?? 0}</div>
                     <div className="text-sm text-blue-200">Pain Severity</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{brief.score.breakdown.signalStrength}</div>
+                    <div className="text-2xl font-bold text-blue-400">{brief.score.breakdown?.signalStrength ?? 0}</div>
                     <div className="text-sm text-blue-200">Signal Strength</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{brief.score.breakdown.fitScore}</div>
+                    <div className="text-2xl font-bold text-blue-400">{brief.score.breakdown?.fitScore ?? 0}</div>
                     <div className="text-sm text-blue-200">Fit Score</div>
                   </div>
                 </div>
                 <ul className="text-sm text-blue-200 space-y-1">
-                  {brief.score.rationale.map((reason, idx) => (
+                  {(brief.score.rationale || []).map((reason, idx) => (
                     <li key={idx}>• {reason}</li>
                   ))}
                 </ul>

@@ -113,7 +113,7 @@ export default function BriefDetailPage() {
             <div className="mt-4 pt-4 border-t border-blue-400/30">
               <h3 className="text-white font-semibold mb-2">Score Rationale</h3>
               <ul className="text-sm text-blue-200 space-y-1">
-                {brief.score.rationale.map((reason, idx) => (
+                {(brief.score.rationale || []).map((reason, idx) => (
                   <li key={idx}>• {reason}</li>
                 ))}
               </ul>
