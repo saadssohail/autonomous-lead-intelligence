@@ -2,8 +2,6 @@
  * Analysis Pipeline - Core intelligence generation logic
  */
 
-import { JSDOM } from 'jsdom';
-import axios from 'axios';
 import type {
   CompanySnapshot,
   Signal,
@@ -79,6 +77,12 @@ async function fetchWebsiteText(domain: string, ctx: PipelineContext): Promise<s
     // If live data requested and enabled, fetch real website
     if (ctx.useLiveData) {
       try {
+        // Dynamic imports — these are heavy and only needed for live scraping
+        const [{ default: axios }, { JSDOM }] = await Promise.all([
+          import('axios'),
+          import('jsdom'),
+        ]);
+        
         const url = domain.startsWith('http') ? domain : `https://${domain}`;
         const response = await axios.get(url, {
           timeout: 10000,

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AnalyzeRequestSchema, type AnalyzeResponse, type AnalysisRun } from '@/types';
 import { prisma } from '@/lib/prisma';
-import { runAnalysisPipeline } from '@/lib/pipeline';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +9,7 @@ export const maxDuration = 60; // Max 60 seconds for Vercel
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log("DATABASE_URL length:", process.env.DATABASE_URL?.length ?? 0);
+    console.log("[analyze] request received, DATABASE_URL present:", Boolean(process.env.DATABASE_URL));
 
     
     // Validate input
@@ -50,6 +49,9 @@ export async function POST(request: NextRequest) {
     });
 
     try {
+      // Dynamic import to isolate any module-level crash in pipeline
+      const { runAnalysisPipeline } = await import('@/lib/pipeline');
+      
       // Run the pipeline
       const useLiveData = options?.useLiveData ?? false;
       const result = await runAnalysisPipeline(
