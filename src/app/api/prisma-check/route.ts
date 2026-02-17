@@ -1,10 +1,22 @@
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(): Promise<Response> {
-  const url = (prisma as any)._engineConfig?.datasources?.db?.url
-  return Response.json({
-    hasProcessEnv: Boolean(process.env.DATABASE_URL),
-    prismaDatasourceUrlPresent: Boolean(url),
-    prismaDatasourceUrlPrefix: typeof url === 'string' ? url.slice(0, 18) : null, // "postgresql://..."
-  })
+  const hasEnv = Boolean(process.env['DATABASE_URL'])
+  try {
+    // Actually test the DB connection through the proxy
+    const count = await prisma.company.count()
+    return Response.json({
+      hasProcessEnv: hasEnv,
+      connected: true,
+      companyCount: count,
+    })
+  } catch (error) {
+    return Response.json({
+      hasProcessEnv: hasEnv,
+      connected: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, { status: 500 })
+  }
 }
