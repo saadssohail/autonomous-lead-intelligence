@@ -7,6 +7,25 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
+ * Derive a display name from a domain string.
+ * e.g. "https://10pearls.com/" → "10pearls"
+ *      "payflow.example.com"   → "payflow"
+ */
+function deriveNameFromDomain(domain: string): string {
+  try {
+    let host = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    // Remove www.
+    host = host.replace(/^www\./, '');
+    // Take the first segment before the first dot
+    const name = host.split('.')[0] || host;
+    // Capitalise first letter
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch {
+    return '';
+  }
+}
+
+/**
  * POST /api/analyze  (async / job-based)
  *
  * 1. Validates input
@@ -30,8 +49,9 @@ export async function POST(request: NextRequest) {
     }
 
     const { company, options } = validation.data;
-    const companyName = company.name || '';
     const companyDomain = company.domain || '';
+    // Derive a display name from the domain if no name provided
+    const companyName = company.name || deriveNameFromDomain(companyDomain);
 
     if (!companyName && !companyDomain) {
       return NextResponse.json(

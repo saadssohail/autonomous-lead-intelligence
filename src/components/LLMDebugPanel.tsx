@@ -4,18 +4,22 @@ import { useState, useEffect } from 'react';
 import type { LLMInteraction } from '@/lib/llm-provider';
 
 interface LLMDebugPanelProps {
+  runId?: string | null;
   autoRefresh?: boolean;
   refreshInterval?: number;
 }
 
-export default function LLMDebugPanel({ autoRefresh = true, refreshInterval = 3000 }: LLMDebugPanelProps) {
+export default function LLMDebugPanel({ runId, autoRefresh = true, refreshInterval = 3000 }: LLMDebugPanelProps) {
   const [interactions, setInteractions] = useState<LLMInteraction[]>([]);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [showPanel, setShowPanel] = useState(false);
 
   const loadInteractions = async () => {
     try {
-      const response = await fetch('/api/llm-interactions');
+      const url = runId
+        ? `/api/llm-interactions?runId=${encodeURIComponent(runId)}`
+        : '/api/llm-interactions';
+      const response = await fetch(url);
       const data = await response.json();
       if (data.success) {
         setInteractions(data.interactions);
@@ -34,7 +38,8 @@ export default function LLMDebugPanel({ autoRefresh = true, refreshInterval = 30
         return () => clearInterval(interval);
       }
     }
-  }, [showPanel, autoRefresh, refreshInterval]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPanel, autoRefresh, refreshInterval, runId]);
 
   const toggleExpanded = (index: number) => {
     setExpanded(prev => ({ ...prev, [index]: !prev[index] }));

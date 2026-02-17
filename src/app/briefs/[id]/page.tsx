@@ -123,46 +123,102 @@ export default function BriefDetailPage() {
           {/* Signals */}
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
             <h2 className="text-xl font-bold text-white mb-4">🔔 Key Signals</h2>
-            <div className="space-y-3">
-              {brief.signals.map((signal, idx) => (
-                <div key={idx} className="bg-white/5 rounded p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-blue-400 font-semibold capitalize">
-                      {signal.type.replace('_', ' ')}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      signal.strength === 'high' ? 'bg-green-500/30 text-green-200' :
-                      signal.strength === 'medium' ? 'bg-yellow-500/30 text-yellow-200' :
-                      'bg-gray-500/30 text-gray-200'
-                    }`}>
-                      {signal.strength}
-                    </span>
+            {(brief.signals || []).length === 0 ? (
+              <p className="text-blue-300 italic">No signals detected for this company.</p>
+            ) : (
+              <div className="space-y-3">
+                {(brief.signals || []).map((signal, idx) => (
+                  <div key={idx} className="bg-white/5 rounded p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-blue-400 font-semibold capitalize">
+                        {(signal.type || '').replace('_', ' ')}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        signal.strength === 'high' ? 'bg-green-500/30 text-green-200' :
+                        signal.strength === 'medium' ? 'bg-yellow-500/30 text-yellow-200' :
+                        'bg-gray-500/30 text-gray-200'
+                      }`}>
+                        {signal.strength}
+                      </span>
+                    </div>
+                    <p className="text-blue-100">{signal.evidenceText}</p>
                   </div>
-                  <p className="text-blue-100">{signal.evidenceText}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Pain Themes */}
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
             <h2 className="text-xl font-bold text-white mb-4">💊 Customer Pain Themes</h2>
-            <div className="space-y-4">
-              {brief.painThemes.map((pain, idx) => (
-                <div key={idx} className="bg-white/5 rounded p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-red-400 font-semibold">{pain.theme}</span>
-                    <span className="text-sm text-red-300">
-                      Severity: {pain.severityScore.toFixed(1)}/10
-                    </span>
+            {(brief.painThemes || []).length === 0 ? (
+              <p className="text-blue-300 italic">No pain themes detected for this company.</p>
+            ) : (
+              <div className="space-y-4">
+                {(brief.painThemes || []).map((pain, idx) => (
+                  <div key={idx} className="bg-white/5 rounded p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-red-400 font-semibold">{pain.theme}</span>
+                      <span className="text-sm text-red-300">
+                        Severity: {(pain.severityScore ?? 0).toFixed(1)}/10
+                      </span>
+                    </div>
+                    <div className="text-sm text-blue-200 mb-2">
+                      Category: {(pain.category || '').replace('_', ' ')}
+                    </div>
+                    {pain.supportingEvidence && pain.supportingEvidence.length > 0 && (
+                      <div className="text-sm text-blue-100">
+                        <div className="font-semibold mb-1">Evidence:</div>
+                        <ul className="space-y-1 pl-4">
+                          {pain.supportingEvidence.slice(0, 3).map((evidence: string, eidx: number) => (
+                            <li key={eidx} className="italic">
+                              &quot;{evidence.length > 100 ? evidence.slice(0, 100) + '...' : evidence}&quot;
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-blue-200 mb-2">
-                    Category: {pain.category.replace('_', ' ')}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Reasoning Chains */}
+          {(brief.reasoningChains || []).length > 0 && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+              <h2 className="text-xl font-bold text-white mb-4">🧠 Reasoning Chains</h2>
+              <div className="space-y-4">
+                {brief.reasoningChains.map((chain, idx) => (
+                  <div key={idx} className="bg-white/5 rounded p-4">
+                    <div className="flex items-center mb-3">
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        chain.confidence === 'high' ? 'bg-green-500/30 text-green-200' :
+                        chain.confidence === 'medium' ? 'bg-yellow-500/30 text-yellow-200' :
+                        'bg-gray-500/30 text-gray-200'
+                      }`}>
+                        {chain.confidence} confidence
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-blue-400 font-semibold">Observation:</span>
+                        <span className="text-blue-100 ml-2">{chain.observation}</span>
+                      </div>
+                      <div className="pl-4">
+                        <span className="text-purple-400 font-semibold">→ Inference:</span>
+                        <span className="text-blue-100 ml-2">{chain.inference}</span>
+                      </div>
+                      <div className="pl-8">
+                        <span className="text-green-400 font-semibold">→ Opportunity:</span>
+                        <span className="text-blue-100 ml-2">{chain.opportunity}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Why Now & Why Alfabolt */}
           <div className="grid md:grid-cols-2 gap-6">
@@ -176,13 +232,22 @@ export default function BriefDetailPage() {
             </div>
           </div>
 
-          {/* Outreach Message */}
+          {/* Outreach */}
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4">📧 Opening Message</h2>
-            <div className="p-4 bg-white/5 rounded border border-blue-400/30">
-              <pre className="text-blue-100 whitespace-pre-wrap font-sans text-sm">
-                {brief.openingMessage}
-              </pre>
+            <h2 className="text-xl font-bold text-white mb-4">📧 Recommended Outreach</h2>
+            {brief.outreachAngle && (
+              <div className="mb-4">
+                <span className="text-blue-400 font-semibold">Angle:</span>
+                <p className="text-blue-100 mt-1">{brief.outreachAngle}</p>
+              </div>
+            )}
+            <div>
+              <span className="text-blue-400 font-semibold">Opening Message:</span>
+              <div className="mt-2 p-4 bg-white/5 rounded border border-blue-400/30">
+                <pre className="text-blue-100 whitespace-pre-wrap font-sans text-sm">
+                  {brief.openingMessage}
+                </pre>
+              </div>
             </div>
           </div>
         </div>

@@ -24,12 +24,18 @@ export async function GET(
       );
     }
 
+    // Parse logs — handle both old (plain array) and new ({ steps, llmInteractions }) formats
+    const rawLogs = JSON.parse(run.logs || '[]');
+    const pipelineLogs = Array.isArray(rawLogs) ? rawLogs : (rawLogs.steps || []);
+    const llmInteractions = Array.isArray(rawLogs) ? [] : (rawLogs.llmInteractions || []);
+
     const response: Record<string, any> = {
       success: true,
       run: {
         id: run.id,
         status: run.status,
-        logs: JSON.parse(run.logs || '[]'),
+        logs: pipelineLogs,
+        llmInteractions,
         startedAt: run.startedAt,
         finishedAt: run.finishedAt,
       },

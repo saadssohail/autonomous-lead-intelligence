@@ -15,6 +15,7 @@ export default function AnalyzePage() {
   const [error, setError] = useState<string | null>(null);
   const [brief, setBrief] = useState<Brief | null>(null);
   const [run, setRun] = useState<AnalysisRun | null>(null);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -93,6 +94,7 @@ export default function AnalyzePage() {
     setError(null);
     setBrief(null);
     setRun(null);
+    setCurrentRunId(null);
     setStatusMessage('Submitting analysis request...');
 
     try {
@@ -118,6 +120,7 @@ export default function AnalyzePage() {
       }
 
       // Got runId — start polling
+      setCurrentRunId(data.runId);
       setStatusMessage('Analysis queued — waiting for results...');
       pollForResults(data.runId);
     } catch (err) {
@@ -429,7 +432,7 @@ export default function AnalyzePage() {
       </div>
       
       {/* LLM Debug Panel */}
-      <LLMDebugPanel />
+      <LLMDebugPanel runId={currentRunId} />
     </main>
   );
 }

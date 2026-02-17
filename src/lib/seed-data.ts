@@ -569,6 +569,7 @@ export function getSeedCompanyByDomain(domain: string): SeedCompany | undefined 
  */
 export function getSeedCompanyByName(name: string): SeedCompany | undefined {
   const normalizedName = name.toLowerCase().trim();
+  if (!normalizedName) return undefined; // Guard against empty string matching everything
   return SEED_COMPANIES.find(c => 
     c.name.toLowerCase().includes(normalizedName) || 
     normalizedName.includes(c.name.toLowerCase())

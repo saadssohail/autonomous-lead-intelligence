@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getLLMInteractions, clearLLMInteractions } from '@/lib/llm-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,6 +30,9 @@ export async function POST(request: NextRequest) {
       where: { id: runId },
       data: { status: 'running' },
     });
+
+    // Clear previous in-memory interactions before this pipeline run
+    clearLLMInteractions();
 
     // Dynamic import to isolate module-level crashes
     const { runAnalysisPipeline } = await import('@/lib/pipeline');
@@ -76,12 +80,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update run → completed
+    // Update run → completed (store pipeline logs + LLM interactions)
+    const llmInteractions = getLLMInteractions();
     await prisma.run.update({
       where: { id: runId },
       data: {
         status: 'completed',
-        logs: JSON.stringify(result.logs),
+        logs: JSON.stringify({
+          steps: result.logs,
+          llmInteractions: llmInteractions.map(i => ({
+            timestamp: i.timestamp,
+            operation: i.operation,
+            request: { prompt: i.request.prompt.slice(0, 500), model: i.request.model, temperature: i.request.temperature },
+            response: { content: i.response.content.slice(0, 1000), parsed: undefined },
+            duration: i.duration,
+            error: i.error,
+          })),
+        }),
         finishedAt: new Date(),
       },
     });
