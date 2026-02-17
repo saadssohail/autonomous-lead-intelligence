@@ -10,6 +10,7 @@ type RunStatus = 'queued' | 'running' | 'completed' | 'failed';
 export default function AnalyzePage() {
   const [companyInput, setCompanyInput] = useState('');
   const [inputType, setInputType] = useState<'domain' | 'name'>('name');
+  const [useLiveData, setUseLiveData] = useState(true); // Default to live data
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +107,7 @@ export default function AnalyzePage() {
             [inputType]: companyInput.trim(),
           },
           options: {
-            useLiveData: false,
+            useLiveData: useLiveData,
           },
         }),
       });
@@ -199,6 +200,24 @@ export default function AnalyzePage() {
               className="w-full px-4 py-3 rounded bg-white/20 text-white placeholder-blue-300 border border-blue-400 focus:outline-none focus:border-blue-300"
               onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
             />
+          </div>
+
+          <div className="mb-6">
+            <label className="flex items-center text-white cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useLiveData}
+                onChange={(e) => setUseLiveData(e.target.checked)}
+                className="mr-3 w-5 h-5 text-blue-600 bg-white/20 border-blue-400 rounded focus:ring-blue-500"
+              />
+              <div>
+                <span className="font-semibold">Use Live Data</span>
+                <span className="block text-sm text-blue-300 mt-1">
+                  Scrape website content, testimonials, and careers page in real-time. 
+                  Uncheck to use pre-seeded demo data only.
+                </span>
+              </div>
+            </label>
           </div>
 
           <button

@@ -61,7 +61,7 @@ function logStep(
 }
 
 /**
- * Fetch website content
+ * Fetch website content with enhanced extraction
  */
 async function fetchWebsiteText(domain: string, ctx: PipelineContext): Promise<string> {
   logStep(ctx.logs, 'fetch_website', 'started');
@@ -69,7 +69,7 @@ async function fetchWebsiteText(domain: string, ctx: PipelineContext): Promise<s
   try {
     // Check for seed data first
     const seedCompany = getSeedCompanyByDomain(domain);
-    if (seedCompany) {
+    if (seedCompany && !ctx.useLiveData) {
       logStep(ctx.logs, 'fetch_website', 'completed', 'Using seed data');
       return seedCompany.websiteText;
     }
@@ -86,16 +86,28 @@ async function fetchWebsiteText(domain: string, ctx: PipelineContext): Promise<s
         const url = domain.startsWith('http') ? domain : `https://${domain}`;
         const response = await axios.get(url, {
           timeout: 10000,
-          headers: { 'User-Agent': 'Mozilla/5.0' },
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         });
         
         const dom = new JSDOM(response.data);
-        const text = dom.window.document.body.textContent || '';
+        const doc = dom.window.document;
         
-        logStep(ctx.logs, 'fetch_website', 'completed', 'Fetched live website');
-        return text.slice(0, 5000); // Limit to 5000 chars
+        // Remove script, style, and nav elements
+        doc.querySelectorAll('script, style, nav, header, footer').forEach(el => el.remove());
+        
+        // Extract main content with better structure
+        const mainContent = doc.querySelector('main, [role="main"], .content, #content');
+        const text = (mainContent ? mainContent.textContent : doc.body.textContent) || '';
+        
+        // Clean up whitespace
+        const cleanText = text.replace(/\s+/g, ' ').trim();
+        
+        logStep(ctx.logs, 'fetch_website', 'completed', `Fetched live website (${cleanText.length} chars)`);
+        return cleanText.slice(0, 10000); // Increased limit for better context
       } catch (error) {
-        console.warn('Failed to fetch website, using fallback:', error);
+        console.warn('Failed to fetch website:', error);
+        logStep(ctx.logs, 'fetch_website', 'failed', `Error: ${error instanceof Error ? error.message : String(error)}`);
+        return '';
       }
     }
 
@@ -108,7 +120,283 @@ async function fetchWebsiteText(domain: string, ctx: PipelineContext): Promise<s
 }
 
 /**
- * Load feedback data
+ * Scrape careers page for hiring signals
+ */
+async function scrapeCareersPage(
+  domain: string,
+  ctx: PipelineContext
+): Promise<string | null> {
+  try {
+    const [{ default: axios }, { JSDOM }] = await Promise.all([
+      import('axios'),
+      import('jsdom'),
+    ]);
+    
+    const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+    const careerUrls = [
+      `${baseUrl}/careers`,
+      `${baseUrl}/jobs`,
+      `${baseUrl}/join`,
+      `${baseUrl}/about/careers`,
+      `${baseUrl}/company/careers`,
+    ];
+    
+    for (const url of careerUrls) {
+      try {
+        const response = await axios.get(url, {
+          timeout: 8000,
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          validateStatus: (status) => status === 200,
+        });
+        
+        const dom = new JSDOM(response.data);
+        const text = dom.window.document.body.textContent || '';
+        
+        // If we found a careers page with substantial content
+        if (text.length > 500) {
+          return text.slice(0, 5000);
+        }
+      } catch (error) {
+        // Continue to next URL
+        continue;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('Failed to scrape careers page:', error);
+    return null;
+  }
+}
+
+/**
+ * Scrape customer testimonials/reviews from website
+ */
+async function scrapeWebsiteFeedback(
+  domain: string,
+  ctx: PipelineContext
+): Promise<FeedbackItem[]> {
+  try {
+    const [{ default: axios }, { JSDOM }] = await Promise.all([
+      import('axios'),
+      import('jsdom'),
+    ]);
+    
+    const feedback: FeedbackItem[] = [];
+    const url = domain.startsWith('http') ? domain : `https://${domain}`;
+    
+    // Try common testimonial/review pages
+    const pagesToCheck = [
+      url,
+      `${url}/testimonials`,
+      `${url}/reviews`,
+      `${url}/customers`,
+      `${url}/case-studies`,
+    ];
+    
+    for (const pageUrl of pagesToCheck) {
+      try {
+        const response = await axios.get(pageUrl, {
+          timeout: 8000,
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          validateStatus: (status) => status === 200,
+        });
+        
+        const dom = new JSDOM(response.data);
+        const doc = dom.window.document;
+        
+        // Look for testimonial-like content
+        const selectors = [
+          '.testimonial, .review, .customer-quote, [class*="testimonial"], [class*="review"]',
+          'blockquote',
+          '[itemtype*="Review"]',
+        ];
+        
+        for (const selector of selectors) {
+          const elements = doc.querySelectorAll(selector);
+          elements.forEach((el, idx) => {
+            const text = el.textContent?.trim();
+            if (text && text.length > 50 && text.length < 1000) {
+              feedback.push({
+                source: pageUrl === url ? 'website' : pageUrl.split('/').pop() || 'website',
+                quote: text,
+                sentiment: 'neutral' as const,
+                url: pageUrl,
+              });
+            }
+          });
+          
+          if (feedback.length >= 5) break;
+        }
+        
+        if (feedback.length >= 5) break;
+      } catch (error) {
+        // Silently continue to next page
+        continue;
+      }
+    }
+    
+    return feedback.slice(0, 10); // Limit to 10 testimonials
+  } catch (error) {
+    console.warn('Failed to scrape website feedback:', error);
+    return [];
+  }
+}
+
+/**
+ * Scrape reviews from third-party platforms (Glassdoor, G2, Trustpilot, etc.)
+ */
+async function scrapeThirdPartyReviews(
+  companyName: string,
+  domain: string,
+  ctx: PipelineContext
+): Promise<FeedbackItem[]> {
+  try {
+    const [{ default: axios }, { JSDOM }] = await Promise.all([
+      import('axios'),
+      import('jsdom'),
+    ]);
+    
+    const feedback: FeedbackItem[] = [];
+    const headers = { 
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+    
+    // Extract company slug from name (e.g., "10Pearls" -> "10pearls")
+    const companySlug = companyName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const domainBase = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('.')[0];
+    
+    // 1. Try Glassdoor (employee reviews - great for discovering pain points)
+    try {
+      const glassdoorUrl = `https://www.glassdoor.com/Reviews/${companySlug}-reviews-SRCH_KE0,${companySlug.length}.htm`;
+      const response = await axios.get(glassdoorUrl, {
+        timeout: 8000,
+        headers,
+        validateStatus: (status) => status === 200,
+      });
+      
+      const dom = new JSDOM(response.data);
+      const doc = dom.window.document;
+      
+      // Look for review content (Glassdoor structure)
+      const reviewElements = doc.querySelectorAll('[class*="reviewBodyCell"], [class*="ReviewDetails"], .empReview, [data-test="review"]');
+      reviewElements.forEach((el) => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 100 && text.length < 1500) {
+          feedback.push({
+            source: 'Glassdoor',
+            quote: text.slice(0, 800), // Limit length
+            sentiment: 'neutral' as const,
+            url: glassdoorUrl,
+          });
+        }
+      });
+    } catch (error) {
+      // Glassdoor might block scraping - skip silently
+    }
+    
+    // 2. Try G2 (software reviews - excellent for SaaS/tech companies)
+    try {
+      const g2Url = `https://www.g2.com/products/${companySlug}/reviews`;
+      const response = await axios.get(g2Url, {
+        timeout: 8000,
+        headers,
+        validateStatus: (status) => status === 200,
+      });
+      
+      const dom = new JSDOM(response.data);
+      const doc = dom.window.document;
+      
+      // Look for G2 review content
+      const reviewElements = doc.querySelectorAll('[class*="review-text"], [itemprop="reviewBody"], .pjax-content p');
+      reviewElements.forEach((el) => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 50 && text.length < 1000 && !feedback.some(f => f.quote === text)) {
+          feedback.push({
+            source: 'G2',
+            quote: text,
+            sentiment: 'neutral' as const,
+            url: g2Url,
+          });
+        }
+      });
+    } catch (error) {
+      // G2 might not have the company or block scraping - skip silently
+    }
+    
+    // 3. Try Trustpilot (customer reviews)
+    try {
+      const trustpilotUrl = `https://www.trustpilot.com/review/${domainBase}.com`;
+      const response = await axios.get(trustpilotUrl, {
+        timeout: 8000,
+        headers,
+        validateStatus: (status) => status === 200,
+      });
+      
+      const dom = new JSDOM(response.data);
+      const doc = dom.window.document;
+      
+      // Look for Trustpilot review content
+      const reviewElements = doc.querySelectorAll('[class*="review-content"], [data-service-review-text-typography], p[class*="typography"]');
+      reviewElements.forEach((el) => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 50 && text.length < 1000 && !feedback.some(f => f.quote === text)) {
+          feedback.push({
+            source: 'Trustpilot',
+            quote: text,
+            sentiment: 'neutral' as const,
+            url: trustpilotUrl,
+          });
+        }
+      });
+    } catch (error) {
+      // Trustpilot might not have the company - skip silently
+    }
+    
+    // 4. Search Google for "[company] reviews" and scrape snippets
+    try {
+      const searchQuery = encodeURIComponent(`${companyName} customer reviews feedback`);
+      const googleUrl = `https://www.google.com/search?q=${searchQuery}`;
+      const response = await axios.get(googleUrl, {
+        timeout: 8000,
+        headers,
+        validateStatus: (status) => status === 200,
+      });
+      
+      const dom = new JSDOM(response.data);
+      const doc = dom.window.document;
+      
+      // Extract snippets from search results (these often contain review excerpts)
+      const snippets = doc.querySelectorAll('.VwiC3b, [data-content-feature="1"], .hgKElc, .s');
+      snippets.forEach((el) => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 80 && text.length < 500 && !feedback.some(f => f.quote === text)) {
+          // Only include if it looks like a review (contains review-like words)
+          if (text.match(/review|customer|experience|using|service|product|software|platform/i)) {
+            feedback.push({
+              source: 'Google Search',
+              quote: text,
+              sentiment: 'neutral' as const,
+              url: googleUrl,
+            });
+          }
+        }
+      });
+    } catch (error) {
+      // Google might block - skip silently
+    }
+    
+    return feedback.slice(0, 15); // Limit to 15 third-party reviews
+  } catch (error) {
+    console.warn('Failed to scrape third-party reviews:', error);
+    return [];
+  }
+}
+
+/**
+ * Load feedback data from seed or live sources
  */
 async function loadFeedback(
   companyName: string,
@@ -120,7 +408,8 @@ async function loadFeedback(
   try {
     const seedCompany = getSeedCompanyByDomain(domain) || getSeedCompanyByName(companyName);
     
-    if (seedCompany) {
+    // If we have seed data and not explicitly requesting live data, use it
+    if (seedCompany && !ctx.useLiveData) {
       const feedback = seedCompany.feedback.map(f => ({
         source: f.source,
         quote: f.quote,
@@ -128,11 +417,41 @@ async function loadFeedback(
         url: f.url,
       }));
       
-      logStep(ctx.logs, 'load_feedback', 'completed', `Loaded ${feedback.length} feedback items`);
+      logStep(ctx.logs, 'load_feedback', 'completed', `Loaded ${feedback.length} feedback items from seed data`);
       return feedback;
     }
+    
+    // For live data, try multiple sources in parallel
+    if (ctx.useLiveData) {
+      const [websiteFeedback, thirdPartyFeedback] = await Promise.all([
+        scrapeWebsiteFeedback(domain, ctx),
+        scrapeThirdPartyReviews(companyName, domain, ctx),
+      ]);
+      
+      // Combine all feedback sources
+      const allFeedback = [...websiteFeedback, ...thirdPartyFeedback];
+      
+      if (allFeedback.length > 0) {
+        // Deduplicate based on quote similarity (simple check)
+        const uniqueFeedback: FeedbackItem[] = [];
+        allFeedback.forEach(item => {
+          const isDuplicate = uniqueFeedback.some(existing => 
+            existing.quote.toLowerCase().includes(item.quote.toLowerCase().slice(0, 100)) ||
+            item.quote.toLowerCase().includes(existing.quote.toLowerCase().slice(0, 100))
+          );
+          if (!isDuplicate) {
+            uniqueFeedback.push(item);
+          }
+        });
+        
+        const sources = Array.from(new Set(uniqueFeedback.map(f => f.source)));
+        logStep(ctx.logs, 'load_feedback', 'completed', 
+          `Scraped ${uniqueFeedback.length} reviews from ${sources.length} sources: ${sources.join(', ')}`);
+        return uniqueFeedback.slice(0, 20); // Limit to top 20 reviews
+      }
+    }
 
-    logStep(ctx.logs, 'load_feedback', 'completed', 'No feedback data available');
+    logStep(ctx.logs, 'load_feedback', 'completed', 'No feedback data available - will skip pain theme detection');
     return [];
   } catch (error) {
     logStep(ctx.logs, 'load_feedback', 'failed', String(error));
@@ -147,6 +466,7 @@ async function extractSignals(
   websiteText: string,
   feedback: FeedbackItem[],
   seedCompany: SeedCompany | undefined,
+  careersPageText: string | null,
   ctx: PipelineContext
 ): Promise<Signal[]> {
   logStep(ctx.logs, 'extract_signals', 'started');
@@ -155,7 +475,7 @@ async function extractSignals(
   const now = new Date();
 
   try {
-    // Extract funding signals
+    // Extract funding signals from seed data
     if (seedCompany?.fundingEvents) {
       seedCompany.fundingEvents.forEach(event => {
         signals.push({
@@ -168,9 +488,10 @@ async function extractSignals(
       });
     }
 
-    // Extract hiring signals from careers page
-    if (seedCompany?.careersPageText) {
-      const jobMatches = seedCompany.careersPageText.match(/(?:Senior|Lead|Staff|Principal)?\s*(?:Backend|Frontend|Full Stack|Platform|Security|DevOps|Data)\s*Engineer/gi);
+    // Extract hiring signals from careers page (seed or live data)
+    const careerText = careersPageText || seedCompany?.careersPageText;
+    if (careerText) {
+      const jobMatches = careerText.match(/(?:Senior|Lead|Staff|Principal)?\s*(?:Backend|Frontend|Full Stack|Platform|Security|DevOps|Data|Software)\s*Engineer/gi);
       if (jobMatches && jobMatches.length > 0) {
         signals.push({
           type: 'hiring',
@@ -179,35 +500,108 @@ async function extractSignals(
           strength: jobMatches.length >= 5 ? 'high' : 'medium',
           extractedAt: now,
         });
+      } else {
+        // Check for general hiring signals
+        const hiringIndicators = careerText.toLowerCase();
+        if (hiringIndicators.includes('open position') || hiringIndicators.includes('join our team') || hiringIndicators.includes('we\'re hiring')) {
+          signals.push({
+            type: 'hiring',
+            evidenceText: 'Company is actively hiring based on careers page',
+            url: undefined,
+            strength: 'low',
+            extractedAt: now,
+          });
+        }
       }
     }
 
-    // Extract technical signals from website
-    const techKeywords = ['api', 'integration', 'scalability', 'cloud', 'infrastructure', 'security'];
-    const foundKeywords = techKeywords.filter(kw => websiteText.toLowerCase().includes(kw));
-    if (foundKeywords.length >= 3) {
-      signals.push({
-        type: 'technical',
-        evidenceText: `Platform mentions: ${foundKeywords.join(', ')}`,
-        url: undefined,
-        strength: 'medium',
-        extractedAt: now,
-      });
+    // For live data: Extract signals from actual website content
+    if (ctx.useLiveData && websiteText) {
+      const lowerText = websiteText.toLowerCase();
+      
+      // Detect hiring/growth signals from website
+      const hiringKeywords = ['hiring', 'we\'re hiring', 'join our team', 'careers', 'open positions', 'now hiring'];
+      const growthKeywords = ['raised', 'funding', 'series', 'investment', 'expanding', 'growth'];
+      const techKeywords = ['api', 'integration', 'scalability', 'cloud', 'infrastructure', 'security', 'platform', 'microservices'];
+      const productKeywords = ['launching', 'new feature', 'announcing', 'released', 'beta'];
+      
+      // Check for hiring signals
+      const hiringCount = hiringKeywords.filter(kw => lowerText.includes(kw)).length;
+      if (hiringCount >= 2) {
+        signals.push({
+          type: 'hiring',
+          evidenceText: `Website mentions hiring and careers (found ${hiringCount} hiring-related keywords)`,
+          url: undefined,
+          strength: hiringCount >= 3 ? 'medium' : 'low',
+          extractedAt: now,
+        });
+      }
+      
+      // Check for growth/funding signals
+      const growthCount = growthKeywords.filter(kw => lowerText.includes(kw)).length;
+      if (growthCount >= 2) {
+        signals.push({
+          type: 'funding',
+          evidenceText: `Website indicates recent growth or funding activity (found ${growthCount} growth indicators)`,
+          url: undefined,
+          strength: 'low',
+          extractedAt: now,
+        });
+      }
+      
+      // Check for technical signals
+      const techCount = techKeywords.filter(kw => lowerText.includes(kw)).length;
+      if (techCount >= 4) {
+        signals.push({
+          type: 'technical',
+          evidenceText: `Platform has strong technical focus: ${techKeywords.filter(kw => lowerText.includes(kw)).slice(0, 5).join(', ')}`,
+          url: undefined,
+          strength: 'medium',
+          extractedAt: now,
+        });
+      }
+      
+      // Check for product launch signals
+      const productCount = productKeywords.filter(kw => lowerText.includes(kw)).length;
+      if (productCount >= 2) {
+        signals.push({
+          type: 'product_launch',
+          evidenceText: `Recent product activity detected (found ${productCount} product-related announcements)`,
+          url: undefined,
+          strength: 'low',
+          extractedAt: now,
+        });
+      }
+    } else if (!seedCompany && websiteText) {
+      // Fallback: Basic signal extraction for non-live, non-seed data
+      const techKeywords = ['api', 'integration', 'scalability', 'cloud', 'infrastructure', 'security'];
+      const foundKeywords = techKeywords.filter(kw => websiteText.toLowerCase().includes(kw));
+      if (foundKeywords.length >= 3) {
+        signals.push({
+          type: 'technical',
+          evidenceText: `Platform mentions: ${foundKeywords.join(', ')}`,
+          url: undefined,
+          strength: 'medium',
+          extractedAt: now,
+        });
+      }
     }
 
-    // Extract product signals from feedback themes
-    const productMentions = feedback.filter(f => 
-      f.quote.toLowerCase().includes('feature') || 
-      f.quote.toLowerCase().includes('product')
-    );
-    if (productMentions.length >= 3) {
-      signals.push({
-        type: 'product_launch',
-        evidenceText: `${productMentions.length} customer feedback items mention features/products`,
-        url: undefined,
-        strength: 'low',
-        extractedAt: now,
-      });
+    // Extract product signals from feedback themes (both seed and live)
+    if (feedback && feedback.length > 0) {
+      const productMentions = feedback.filter(f => 
+        f.quote.toLowerCase().includes('feature') || 
+        f.quote.toLowerCase().includes('product')
+      );
+      if (productMentions.length >= 3) {
+        signals.push({
+          type: 'product_launch',
+          evidenceText: `${productMentions.length} customer feedback items mention features/products`,
+          url: undefined,
+          strength: 'low',
+          extractedAt: now,
+        });
+      }
     }
 
     logStep(ctx.logs, 'extract_signals', 'completed', `Extracted ${signals.length} signals`);
@@ -228,12 +622,18 @@ async function detectPainThemes(
   logStep(ctx.logs, 'detect_pain_themes', 'started');
   
   try {
+    // Guard: Don't call LLM if no feedback (prevents hallucination)
+    if (!feedback || feedback.length === 0) {
+      logStep(ctx.logs, 'detect_pain_themes', 'completed', 'Skipped - no feedback data available');
+      return [];
+    }
+    
     const llm = getLLMProvider();
     const feedbackQuotes = feedback.map(f => f.quote);
     
     const themes = await llm.detectPainThemes(feedbackQuotes);
     
-    logStep(ctx.logs, 'detect_pain_themes', 'completed', `Detected ${themes.length} pain themes`);
+    logStep(ctx.logs, 'detect_pain_themes', 'completed', `Detected ${themes.length} pain themes from ${feedback.length} feedback items`);
     return themes;
   } catch (error) {
     logStep(ctx.logs, 'detect_pain_themes', 'failed', String(error));
@@ -413,8 +813,20 @@ export async function runAnalysisPipeline(
   // Step 3: Get seed company (for other data)
   const seedCompany = getSeedCompanyByDomain(companyDomain) || getSeedCompanyByName(companyName);
 
+  // Step 3.5: Scrape careers page if using live data
+  let careersPageText: string | null = null;
+  if (ctx.useLiveData && !seedCompany) {
+    logStep(ctx.logs, 'scrape_careers', 'started');
+    careersPageText = await scrapeCareersPage(companyDomain, ctx);
+    if (careersPageText) {
+      logStep(ctx.logs, 'scrape_careers', 'completed', `Found careers page (${careersPageText.length} chars)`);
+    } else {
+      logStep(ctx.logs, 'scrape_careers', 'completed', 'No careers page found');
+    }
+  }
+
   // Step 4: Extract signals
-  const signals = await extractSignals(websiteText, feedback, seedCompany, ctx);
+  const signals = await extractSignals(websiteText, feedback, seedCompany, careersPageText, ctx);
 
   // Step 5: Detect pain themes
   const painThemes = await detectPainThemes(feedback, ctx);

@@ -86,12 +86,21 @@ export class OpenAIProvider implements LLMProvider {
 
   async detectPainThemes(feedback: string[]): Promise<PainTheme[]> {
     const startTime = Date.now();
+    
+    // Guard: Don't process if no feedback (prevents hallucination)
+    if (!feedback || feedback.length === 0) {
+      console.log('Skipping pain theme detection: no feedback provided');
+      return [];
+    }
+    
     const prompt = `Analyze the following customer feedback and identify dominant pain themes.
 For each theme, provide:
 - A concise theme name (2-4 words)
 - A category (onboarding, compliance, payment_reliability, customer_support, integrations, performance, reporting, security, ux_design, mobile_experience)
 - Supporting evidence (quotes from feedback)
 - Severity score (0-10 based on frequency and intensity)
+
+IMPORTANT: Only identify themes that are EXPLICITLY mentioned in the feedback below. Do not infer or assume pain points.
 
 Feedback:
 ${feedback.map((f, i) => `${i + 1}. "${f}"`).join('\n')}
@@ -147,17 +156,27 @@ Return ONLY a JSON object with a "themes" array. Example format:
 
   async generateReasoningChains(signals: Signal[], painThemes: PainTheme[]): Promise<ReasoningChain[]> {
     const startTime = Date.now();
-    const prompt = `You are a B2B sales intelligence analyst. Given these signals and pain themes, generate explicit reasoning chains following the pattern:
+    
+    // Guard: Need at least one signal to generate reasoning
+    if (!signals || signals.length === 0) {
+      console.log('Skipping reasoning chain generation: no signals available');
+      return [];
+    }
+    
+    const hasPainThemes = painThemes && painThemes.length > 0;
+    
+    const prompt = `You are a B2B sales intelligence analyst. Given these signals${hasPainThemes ? ' and pain themes' : ''}, generate explicit reasoning chains following the pattern:
 Observation → Inference → Opportunity
 
 Signals:
 ${signals.map(s => `- ${s.type}: ${s.evidenceText}`).join('\n')}
-
+${hasPainThemes ? `
 Pain Themes:
-${painThemes.map(p => `- ${p.theme} (severity: ${p.severityScore}/10)`).join('\n')}
+${painThemes.map(p => `- ${p.theme} (severity: ${p.severityScore}/10)`).join('\n')}` : ''}
 
-Generate 3-5 reasoning chains that connect signals and pain points to business opportunities.
+Generate ${signals.length >= 3 ? '3-5' : '1-2'} reasoning chains that connect signals${hasPainThemes ? ' and pain points' : ''} to business opportunities.
 Each chain should have high/medium/low confidence.
+Base your reasoning ONLY on the signals${hasPainThemes ? ' and pain themes' : ''} provided above.
 
 Return ONLY a JSON object with a "chains" array. Example format:
 {
