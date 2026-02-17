@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { GetBriefResponse, Brief } from '@/types';
 import prisma from '@/lib/prisma';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

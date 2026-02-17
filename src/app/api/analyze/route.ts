@@ -3,6 +3,8 @@ import { AnalyzeRequestSchema, type AnalyzeResponse, type AnalysisRun } from '@/
 import prisma from '@/lib/prisma';
 import { runAnalysisPipeline } from '@/lib/pipeline';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Max 60 seconds for Vercel
 
 export async function POST(request: NextRequest) {
