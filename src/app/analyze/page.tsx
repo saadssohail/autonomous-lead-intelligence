@@ -1,17 +1,86 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import type { Brief, AnalysisRun } from '@/types';
 import LLMDebugPanel from '@/components/LLMDebugPanel';
+
+type RunStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export default function AnalyzePage() {
   const [companyInput, setCompanyInput] = useState('');
   const [inputType, setInputType] = useState<'domain' | 'name'>('name');
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [brief, setBrief] = useState<Brief | null>(null);
   const [run, setRun] = useState<AnalysisRun | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollForResults = useCallback((runId: string) => {
+    let attempts = 0;
+    const maxAttempts = 60; // 60 × 2s = 2 minutes max
+
+    pollRef.current = setInterval(async () => {
+      attempts++;
+
+      if (attempts > maxAttempts) {
+        stopPolling();
+        setError('Analysis timed out. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/runs/${runId}`);
+        const data = await res.json();
+
+        if (!data.success) {
+          stopPolling();
+          setError(data.error || 'Failed to fetch run status');
+          setLoading(false);
+          return;
+        }
+
+        const status: RunStatus = data.run.status;
+
+        if (status === 'queued') {
+          setStatusMessage('Queued — waiting for pipeline to start...');
+        } else if (status === 'running') {
+          setStatusMessage('Running analysis pipeline...');
+        } else if (status === 'completed') {
+          stopPolling();
+          setStatusMessage(null);
+          setBrief(data.brief || null);
+          setRun({
+            id: data.run.id,
+            input: {},
+            status: 'completed',
+            logs: data.run.logs || [],
+            startedAt: data.run.startedAt,
+            finishedAt: data.run.finishedAt,
+            briefId: data.run.briefId,
+          } as AnalysisRun);
+          setLoading(false);
+        } else if (status === 'failed') {
+          stopPolling();
+          setStatusMessage(null);
+          setError(data.run.error || 'Analysis pipeline failed.');
+          setLoading(false);
+        }
+      } catch (err) {
+        // Network error — keep polling, might be transient
+        console.warn('Poll error:', err);
+      }
+    }, 2000);
+  }, [stopPolling]);
 
   const handleAnalyze = async () => {
     if (!companyInput.trim()) {
@@ -19,10 +88,12 @@ export default function AnalyzePage() {
       return;
     }
 
+    stopPolling();
     setLoading(true);
     setError(null);
     setBrief(null);
     setRun(null);
+    setStatusMessage('Submitting analysis request...');
 
     try {
       const response = await fetch('/api/analyze', {
@@ -42,14 +113,15 @@ export default function AnalyzePage() {
 
       if (!data.success) {
         setError(data.error || 'Analysis failed');
+        setLoading(false);
         return;
       }
 
-      setBrief(data.brief);
-      setRun(data.run);
+      // Got runId — start polling
+      setStatusMessage('Analysis queued — waiting for results...');
+      pollForResults(data.runId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze company');
-    } finally {
       setLoading(false);
     }
   };
@@ -146,8 +218,8 @@ export default function AnalyzePage() {
           <div className="max-w-4xl mx-auto bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto mb-4"></div>
             <div className="text-blue-200">
-              <p className="text-xl mb-2">Analyzing company...</p>
-              <p className="text-sm">This typically takes 10-30 seconds</p>
+              <p className="text-xl mb-2">{statusMessage || 'Analyzing company...'}</p>
+              <p className="text-sm">The pipeline runs in the background. This page polls for results.</p>
             </div>
           </div>
         )}
