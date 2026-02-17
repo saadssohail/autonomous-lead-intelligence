@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<Response> {
-  const hasEnv = Boolean(process.env['DATABASE_URL'])
+  const hasEnv = Boolean(process.env.DATABASE_URL)
   try {
     // Actually test the DB connection through the proxy
     const count = await prisma.company.count()

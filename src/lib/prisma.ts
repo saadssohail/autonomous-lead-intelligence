@@ -17,8 +17,8 @@ function getPrismaClient(): PrismaClient {
   }
 
   // Lazy initialization - only happens when prisma is first used
-  // Use bracket notation to prevent Next.js/webpack static replacement
-  const url = process.env['DATABASE_URL']
+  // NOTE: must use dot notation so Next.js webpack inlines the build-time value
+  const url = process.env.DATABASE_URL
   if (!url) {
     throw new Error(
       `Missing DATABASE_URL at runtime (keys: ${Object.keys(process.env).filter(k => k.includes('DATABASE')).join(', ') || 'none'})`

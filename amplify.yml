@@ -7,6 +7,12 @@ applications:
           commands:
             - npm ci --legacy-peer-deps
             - npx prisma generate
+            # Write runtime env vars into .env.production so they are bundled
+            # into the standalone output and available to the SSR Lambda
+            - |
+              echo "DATABASE_URL=$DATABASE_URL" >> .env.production
+              echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> .env.production
+              echo "DEMO_MODE=$DEMO_MODE" >> .env.production
         build:
           commands:
             - npm run build
