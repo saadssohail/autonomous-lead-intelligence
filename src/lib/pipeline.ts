@@ -434,18 +434,18 @@ export async function runAnalysisPipeline(
   // Step 8: Generate why Alfabolt
   const whyAlfabolt = generateWhyAlfabolt(capabilityMatches);
 
-  // Step 9: Generate why now
-  logStep(ctx.logs, 'generate_why_now', 'started');
+  // Step 9 & 10: Generate whyNow and outreachAngle in parallel (independent)
   const llm = getLLMProvider();
-  const whyNow = await llm.generateWhyNow(safeReasoningChains, signals);
-  logStep(ctx.logs, 'generate_why_now', 'completed');
-
-  // Step 10: Generate outreach angle
+  logStep(ctx.logs, 'generate_why_now', 'started');
   logStep(ctx.logs, 'generate_outreach_angle', 'started');
-  const outreachAngle = await llm.generateOutreachAngle(safePainThemes, safeReasoningChains);
+  const [whyNow, outreachAngle] = await Promise.all([
+    llm.generateWhyNow(safeReasoningChains, signals),
+    llm.generateOutreachAngle(safePainThemes, safeReasoningChains),
+  ]);
+  logStep(ctx.logs, 'generate_why_now', 'completed');
   logStep(ctx.logs, 'generate_outreach_angle', 'completed');
 
-  // Step 11: Generate opening message
+  // Step 11: Generate opening message (depends on whyNow + outreachAngle)
   logStep(ctx.logs, 'generate_opening_message', 'started');
   const openingMessage = await llm.generateOpeningMessage(
     companyName,

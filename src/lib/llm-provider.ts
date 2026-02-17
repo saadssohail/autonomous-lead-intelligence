@@ -81,7 +81,7 @@ export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
 
   constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({ apiKey, timeout: 15_000 }); // 15s per-request timeout
   }
 
   async detectPainThemes(feedback: string[]): Promise<PainTheme[]> {
@@ -110,7 +110,7 @@ Return ONLY a JSON object with a "themes" array. Example format:
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.3,
@@ -124,7 +124,7 @@ Return ONLY a JSON object with a "themes" array. Example format:
       logInteraction({
         timestamp: new Date(),
         operation: 'detectPainThemes',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.3 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.3 },
         response: { content, parsed, raw: content },
         duration: Date.now() - startTime,
       });
@@ -135,7 +135,7 @@ Return ONLY a JSON object with a "themes" array. Example format:
       logInteraction({
         timestamp: new Date(),
         operation: 'detectPainThemes',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.3 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.3 },
         response: { content: '', parsed: null },
         duration: Date.now() - startTime,
         error: errorMsg,
@@ -173,7 +173,7 @@ Return ONLY a JSON object with a "chains" array. Example format:
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.4,
@@ -187,7 +187,7 @@ Return ONLY a JSON object with a "chains" array. Example format:
       logInteraction({
         timestamp: new Date(),
         operation: 'generateReasoningChains',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.4 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.4 },
         response: { content, parsed, raw: content },
         duration: Date.now() - startTime,
       });
@@ -198,7 +198,7 @@ Return ONLY a JSON object with a "chains" array. Example format:
       logInteraction({
         timestamp: new Date(),
         operation: 'generateReasoningChains',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.4 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.4 },
         response: { content: '', parsed: null },
         duration: Date.now() - startTime,
         error: errorMsg,
@@ -222,7 +222,7 @@ Write a concise, specific "why now" statement.`;
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
         max_tokens: 200,
@@ -234,7 +234,7 @@ Write a concise, specific "why now" statement.`;
       logInteraction({
         timestamp: new Date(),
         operation: 'generateWhyNow',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.5 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.5 },
         response: { content, raw: content },
         duration: Date.now() - startTime,
       });
@@ -245,7 +245,7 @@ Write a concise, specific "why now" statement.`;
       logInteraction({
         timestamp: new Date(),
         operation: 'generateWhyNow',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.5 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.5 },
         response: { content: '' },
         duration: Date.now() - startTime,
         error: errorMsg,
@@ -269,7 +269,7 @@ Provide one clear, specific outreach angle.`;
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.6,
         max_tokens: 100,
@@ -281,7 +281,7 @@ Provide one clear, specific outreach angle.`;
       logInteraction({
         timestamp: new Date(),
         operation: 'generateOutreachAngle',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.6 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.6 },
         response: { content, raw: content },
         duration: Date.now() - startTime,
       });
@@ -292,7 +292,7 @@ Provide one clear, specific outreach angle.`;
       logInteraction({
         timestamp: new Date(),
         operation: 'generateOutreachAngle',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.6 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.6 },
         response: { content: '' },
         duration: Date.now() - startTime,
         error: errorMsg,
@@ -320,7 +320,7 @@ Keep it concise, specific, and value-focused. Don't be overly salesy.`;
 
     try {
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 300,
@@ -332,7 +332,7 @@ Keep it concise, specific, and value-focused. Don't be overly salesy.`;
       logInteraction({
         timestamp: new Date(),
         operation: 'generateOpeningMessage',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.7 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.7 },
         response: { content, raw: content },
         duration: Date.now() - startTime,
       });
@@ -343,7 +343,7 @@ Keep it concise, specific, and value-focused. Don't be overly salesy.`;
       logInteraction({
         timestamp: new Date(),
         operation: 'generateOpeningMessage',
-        request: { prompt, model: 'gpt-4-turbo-preview', temperature: 0.7 },
+        request: { prompt, model: 'gpt-4o-mini', temperature: 0.7 },
         response: { content: '' },
         duration: Date.now() - startTime,
         error: errorMsg,
