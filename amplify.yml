@@ -1,19 +1,24 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - npm ci
-        - npx prisma generate
-        - npx prisma db push --skip-generate || echo "Database sync complete"
-    build:
-      commands:
-        - npm run build
-  artifacts:
-    baseDirectory: .next
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - node_modules/**/*
-      - .next/cache/**/*
+applications:
+  - appRoot: /
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci --legacy-peer-deps
+            - npx prisma generate
+            # strongly recommended to remove db push from Amplify builds
+            # - npx prisma db push --skip-generate
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .next/cache/**/*
+    # remove the entire `environment:variables` block
+    # keep node version config only if needed via console build settings
